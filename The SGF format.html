@@ -1,0 +1,1152 @@
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>The SGF format</title>
+<style type="text/css">
+ tr {vertical-align:top;}
+ td {padding: 1px 10px;}
+ table.sm { font-size:x-small; }
+ table.sm td {padding: 1px 5px;}
+ dt { margin-top: 15px; }
+ table.stat td { font-size:x-small; padding: 1px 5px; }
+ table.stat td:first-child { font-size:x-small; padding: 1px 5px; text-align: right; }
+</style>
+</head>
+<body>
+<font size="-2">This text represents the draft SGF file standard as of
+2016-12-31 - aeb@cwi.nl</font>
+<p>
+<a href="#contents">Table of contents</a>
+
+</p><h1><a name="SGF">The SGF format</a></h1>
+
+<h2><a name="intro">Introduction</a></h2>
+SGF is a format ('Smart Game Format') used to write down commented
+game records, including variation trees, especially for the game Go.
+It was introduced by Anders Kierulf in 1990, and his version is now called
+<a href="http://www.red-bean.com/sgf/ff1_3/ff1.html">FF[1]</a>.
+Martin Müller (1995) made
+<a href="http://www.red-bean.com/sgf/ff1_3/ff3.html">FF[3]</a>.
+Arno Hollosi (1999) made
+<a href="http://www.red-bean.com/sgf/">FF[4]</a>, which is
+the current version.
+<p>
+The present text updates this standard to current usage.
+In many places it comes with recommendations where FF[4] had prescriptions.
+No version number is assigned other than the publication date.
+
+</p><h2><a name="grammar">Grammar</a></h2>
+An SGF file is a production of the following grammar,
+possibly with interspersed ignored parts such as whitespace
+(see Parsing, below).
+<p>
+</p><pre>  Collection     = { GameTree }
+  GameTree       = "(" RootNode NodeSequence { Tail } ")"
+  Tail           = "(" NodeSequence { Tail } ")"
+  NodeSequence   = { Node }
+  RootNode       = Node
+  Node           = ";" { Property }
+  Property       = PropIdent PropValue { PropValue }
+  PropIdent      = UcLetter { UcLetter }
+  PropValue      = "[" Value "]"
+  UcLetter       = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" |
+                   "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" |
+                   "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+</pre>
+<p>
+Here braces { } denote repetition (zero or more times), the vertical bar |
+denotes a choice, and the strings "(", ")", ";", "[", "]", "A", ..., "Z"
+are constants.
+</p><p>
+That is, an SGF file (<i>Collection</i>) is the concatenation of
+zero or more <i>GameTree</i>s.
+<br>
+A <i>GameTree</i> is an open parenthesis, followed by a <i>NodeSequence</i>,
+followed by zero or more <i>GameTree</i>s, followed by a close parenthesis.
+<br>
+A <i>NodeSequence</i> is the concatenation of zero or more <i>Node</i>s.
+<br>
+A <i>Node</i> is a semicolon followed by a <i>Property</i>.
+<br>
+A <i>Property</i> is an identifier (<i>PropIdent</i>) followed by one or more
+<i>PropValue</i>s.
+<br>
+A <i>PropIdent</i> is a sequence of one or more
+upper case letters (<i>UcLetter</i>s).
+<br>
+A <i>PropValue</i> consists
+of arbitrary data enclosed in square brackets.
+</p><p>
+
+</p><h2><a name="parsing">Parsing</a></h2>
+Whitespace is ignored everywhere, except inside a <i>Value</i>.
+Inside a <i>Value</i> whitespace is significant, but an escaped newline
+is ignored. Whitespace inside a <i>PropIdent</i> should be avoided.
+<br>
+Lower case letters are ignored inside a <i>PropIdent</i>.
+<p>
+There is no ambiguity in the grammar, as long as it is possible
+to recognize the "]" that ends a <i>PropValue</i>. If a <i>Value</i>
+contains a "]", it must be escaped. A symbol is escaped by preceding it
+by a non-escaped "\".
+
+</p><h2><a name="charset">Character set</a></h2>
+An SGF file is a text file with text in a character set that includes
+ASCII as a subset.
+The constant strings with grammatical function are in ASCII.
+By default, each <i>Value</i> is given in UTF-8. Then
+the possibility that a character code might contain an embedded ']' byte
+does not arise. If a different character set is used, then before the
+first use of non-ASCII data there should be a property indicating the
+character set, using the <i>PropIdent</i> "CA".
+No escape is used for multibyte characters where one of the constituent
+bytes has the value ']'.
+<p>
+
+</p><h2><a name="semantics">Semantics</a></h2>
+A <i>Collection</i> represents a collection of game records.
+<p>
+A <i>GameTree</i> represents a single game record.
+The <i>RootNode</i> gives metadata about the game.
+Each further <i>Node</i> represents a move in the game.
+A sequence of <i>Tail</i>s represents a number of
+variations, possible sequels, to the game given thus far.
+In particular, a <i>Tail</i> that is just "()" represents
+the possibility of ending the game here.
+</p><p>
+In a record, the status of variations can differ.
+If it represents an actually played game, together with variations,
+then the moves actually played form a distinguished tail.
+It will be the first tail given.
+If the record represents a problem, there may be several correct
+and incorrect solutions, and the first tail has no special status.
+
+</p><h2><a name="games">Game types</a></h2>
+The meaning of the property identifiers depends on the
+type of game being played. This type is indicated using the
+<i>PropIdent</i> "GM" in the root node.
+In the text below we describe the use for the game of Go (Baduk, Weiqi).
+The property "GM[1]" denotes a game record for this game.
+If no such property is given, we shall assume that the record is
+a Go record. For the meaning of values other than 1, see
+<a href="#GM">GM</a>.
+<p>
+Below we give a very short description of the various properties,
+ordered according to type. Afterwards a more precise grammar,
+with properties ordered alphabetically.
+
+</p><h2><a name="rootprops">Root node properties</a></h2>
+The ordering of the properties in the root node is not significant.
+
+<h3>Players</h3>
+PB and PW give the Black and White players, and BR and WR their rank.
+BC and WC are used for their countries. BT and WT for their teams.
+<p>
+
+</p><h3><a name="event">Event</a></h3>
+EV and RO give event and round. DT and PC the date and place.
+<p>
+
+</p><h3><a name="game">Game details</a></h3>
+TM gives the time available to each player.
+OT ("Overtime") gives the type of byo-yomi,
+and the number and length of periods.
+One also uses LC and LT for the number and the length of the periods.
+<p>
+KM gives the komi paid by Black to White.
+</p><p>
+HA gives the handicap.
+</p><p>
+SZ gives the board size.
+</p><p>
+AB and AW ("Add Black", "Add White") give the black and white setup stones.
+For search patterns one uses AB, AW, AE ("Add Empty") to denote positions that
+must be Black, White and Empty.
+</p><p>
+PL ("Player") tells which player moves first.
+</p><p>
+RU gives the rule set used.
+</p><p>
+RE gives the result.
+</p><p>
+TB and TW give the final black and white territory.
+</p><p>
+MN gives the number of moves of the game.
+<!-- One also finds OM -->
+</p><p>
+GC gives arbitrary comments.
+</p><p>
+
+</p><h3><a name="meta">Meta properties</a></h3>
+CA gives the character set of the SGF file.
+<p>
+FF ("File Format") gives the number (1-4) of the SGF standard used.
+</p><p>
+AP gives the application program that produced this SGF file.
+</p><p>
+SO gives the source of information.
+</p><p>
+US gives the user who typed it in.
+</p><p>
+AN ("Annotator") gives the author of the comments.
+</p><p>
+CP gives copyright information.
+</p><p>
+GN ("Game Name") gives a name to the SGF file, such as its filename.
+
+</p><h2><a name="nodeprops">Node properties</a></h2>
+<h3><a name="moveprops">Move properties</a></h3>
+B and W give moves by Black and White.
+<p>
+C gives a comment.
+</p><p>
+Various time properties indicate time used so far, time used for this move,
+time still available for the rest of the game.
+In particular, BL and WL are used for the time left for Black
+(after a black move) or White (after a white move).
+In Canadian byo-yomi, OB and OW are used for the number of
+Black (White) moves that still have to be played in this period.
+In Japanese byo-yomi, OB and OW are used for the number of
+byo-yomi periods remaining.
+
+</p><h3><a name="markupprops">Markup properties</a></h3>
+In order to be able to refer to specific moves or positions,
+one uses markup. How markup is realized upon game display
+depends on the capabilities and properties of the displaying program.
+The SGF standard is about describing possibly commented games,
+not about displaying them, so the descriptions below can only be hints.
+<p>
+SL selects a number of unnamed points.
+</p><p>
+CR, SQ, TR, MA mark the indicated points with a circle, square, triangle, 'X'.
+</p><p>
+LB labels the indicated point with the given label.
+</p><p>
+N names its node.
+</p><p>
+MN (outside the root node) assigns a number to its node, probably
+for display purposes.
+<!-- For a game continuation, the intermediate position can be set up
+using AB, AW, and the move number can be set using MN on the first move. -->
+
+</p><h3><a name="displayprops">Display properties</a></h3>
+Commented games are printed in a journal, or output on a screen.
+Various properties can be added to the SGF file to direct this
+printing or display. Various viewers or sgf-to-image converters
+recognize properties such as VW ("View"), the part of the board
+that should be displayed, and possibly further indications
+about whether captured stones have to be shown, whether move numbers
+are shown, and if so, what numbers, whether there are coordinates
+around the board, and which type, whether hoshi should be shown,
+whether stones are shown in 3D style, etc. etc.
+
+<h2><a name="extendedprops">Extended properties</a></h2>
+The properties mentioned above were of the type meant to be automatically
+retrievable from a data base. Event, names, dates, results are likely
+search fields. For free form information one uses extended properties.
+The event can be "EV[60th Honinbo Title]", with extended information
+"EVX[Sponsored by ..]". The date can be "DT[1980]", with extended
+information "DTX[Broadcast 1980-09-22]" or "DTX[Published 1980-11]".
+Unusual results can be described in an extended result field:
+"REX[The players went for a nap, and it was decided that both lost]".
+<p>
+<font size="-2">
+There have been various other proposals to represent such information.
+One such proposal suggests to separate the free text part from the
+formalized part by a colon, as in DT[1934:Spring],
+DT[1845-03-03,04:Played nonstop through the night],
+DT[1844-04-15:Tenpo 15-II-28], DT[:Early Qing era].
+Another proposal suggests to use further elements of the
+PropValue sequence. No actual usage of such proposals is known.
+<!-- (But see BP below.) -->
+</font>
+
+</p><h2><a name="units">Units</a></h2>
+Time properties require a unit of time. One uses 's', 'm', 'h'
+for seconds, minutes and hours. If no unit is given, the time
+is taken to be in seconds.
+
+<h2><a name="proplist">List of properties</a></h2>
+Here we give details for the above-mentioned properties,
+in alphabetical order.
+<p>
+According to the grammar, a <i>Property</i> consists of an identifier
+(<i>PropIdent</i>) followed by one or more values (<i>PropValue</i>s).
+
+</p><h3><a name="valuetypes">Value types</a></h3>
+The syntax for the <i>PropValue</i>s is one of
+<p><table style="border-spacing:20px 0px;">
+<tbody><tr>
+<th style="text-align:left;">syntax</th>
+<th style="text-align:left;">meaning</th>
+</tr>
+<tr>
+<td><i>text</i></td>
+<td>Text of arbitrary length and contents</td>
+</tr>
+<tr>
+<td><i>simpletext</i></td>
+<td>Text intended to take a single display line. Newline characters
+are equivalent to spaces</td>
+</tr>
+<tr>
+<td><i>point</i></td>
+<td>Board position, e.g. <tt>cq</tt>. A <i>point</i> is a pair
+of coordinates, the horizontal coordinate first, where columns and rows
+are numbered 'a', 'b', 'c', ... In particular, the upper lefthand corner
+is <tt>aa</tt>, and on a 19x19 board the lower righthand corner is
+<tt>ss</tt>.</td>
+</tr>
+<tr>
+<td><i>move</i></td>
+<td><i>point</i> (denoting a move at this point) or empty (denoting Pass)</td>
+</tr>
+<tr>
+<td><i>pointlist</i></td>
+<td>List of board positions, compressed <tt>aa:bc</tt>,
+or not <tt>aa,ab,ac,ba,bb,bc</tt>. (That is, a colon-separated pair
+of board positions denotes all positions in the rectangle of which
+the given positions are top left and bottom right corners.)
+The list may be empty.
+With property <tt>XY</tt> this becomes <tt>XY[aa:bc]</tt> or
+<tt>XY[aa][ab][ac][ba][bb][bc]</tt> or <tt>XY[]</tt>.</td>
+</tr>
+<tr>
+<td><i>pointpair</i></td>
+<td><i>point</i> ':' <i>point</i></td>
+</tr>
+<tr>
+<td><i>labeledpoint</i></td>
+<td><i>point</i> ':' <i>simpletext</i></td>
+</tr>
+<tr>
+<td><i>labellist</i></td>
+<td>Possibly empty list of <i>labeledpoint</i>s</td>
+</tr>
+<tr>
+<td><i>color</i></td>
+<td>'B' | 'W'</td>
+</tr>
+<tr>
+<td><i>number</i></td>
+<td>An optional sign ('+' or '-' or nothing) followed by
+a nonempty sequence of digits in <tt>0..9</tt></td>
+</tr>
+<tr>
+<td><i>numberpair</i></td>
+<td><i>number</i> ':' <i>number</i></td>
+</tr>
+<tr>
+<td><i>real</i></td>
+<td><i>number</i> | <i>number</i> '.' <i>number</i></td>
+</tr>
+<tr>
+<td><i>time</i></td>
+<td><i>real</i> optionally followed by 's', 'm' or 'h'</td>
+</tr>
+</tbody></table>
+</p><p>
+
+</p><h3><a name="list">List</a></h3>
+Below we list the properties standardized in this document in
+alphabetical order.
+<p>
+The identifier is given in the column headed <b>prop</b>,
+the types of the list of values in the column headed <b>args</b>,
+and the description in the final column. In some cases further
+details are given belowe this table.
+</p><p>
+<table>
+<tbody><tr><th>prop</th> <th>meaning</th> <th>arg syntax</th> <th>description</th></tr>
+<tr><td>AB</td> <td>Add Black</td> <td><i>pointlist</i></td> <td>Add black setup or handicap stones, e.g., <tt>AB[dp][pd]</tt></td></tr>
+<tr><td>AE</td> <td>Add Empty</td> <td><i>pointlist</i></td> <td>Make the indicated fields empty</td></tr>
+<tr><td>AN</td> <td>Annotator</td> <td><i>simpletext</i></td> <td>Author of the game analysis</td></tr>
+<tr><td>AP</td> <td>Application</td> <td><i>simpletext</i></td> <td>SGF editor used</td></tr>
+<tr><td>AW</td> <td>Add White</td> <td><i>pointlist</i></td> <td>Add white stones</td></tr>
+<tr><td>B</td> <td>Black move</td> <td><i>move</i></td> <td>Make a black move</td></tr>
+<tr><td>BC</td> <td>Black Country</td> <td><i>simpletext</i></td> <td>Country of the black player, e.g. <tt>CN</tt>, <tt>JP</tt>, <tt>KR</tt>, <tt>TW</tt></td></tr>
+<tr><td>BL</td> <td>Black&nbsp;time&nbsp;Left</td> <td><i>time</i></td> <td>Time left after this move</td></tr>
+<tr><td>BR</td> <td>Black Rank</td> <td><i>simpletext</i></td> <td>Rank of black player, e.g. <tt>Honorary Meijin</tt>, <tt>9p</tt>, <tt>6d ama</tt>, <tt>15k</tt></td></tr>
+<tr><td>BT</td> <td>Black Team</td> <td><i>simpletext</i></td> <td>Team of the black player</td></tr>
+<tr><td>C</td> <td>Comment</td> <td><i>text</i></td> <td>Any comment</td></tr>
+<tr><td>CA</td> <td>Character set</td> <td><i>simpletext</i></td> <td>Character set of the text fields (e.g., <tt>UTF-8</tt>, <tt>GB2312</tt>, <tt>SJIS</tt>, <tt>ISO-2022-KR</tt>, <tt>ISO-8859-15</tt>)</td></tr>
+<tr><td>CP</td> <td>Copyright</td> <td><i>simpletext</i></td> <td>Copyright holder</td></tr>
+<tr><td>CR</td> <td>Circle</td> <td><i>pointlist</i></td> <td>Mark the indicated stones with a circle</td></tr>
+<tr><td>DT</td> <td>Date</td> <td><i>simpletext</i></td> <td>Date, given in Western style, preferably in ISO standard form</td></tr>
+<tr><td>EV</td> <td>Event</td> <td><i>simpletext</i></td> <td>Tournament or other event</td></tr>
+<tr><td>FF</td> <td>File Format</td> <td><i>number</i></td> <td>SGF file format, e.g., <tt>FF[1]</tt>, <tt>FF[3]</tt>, <tt>FF[4]</tt></td></tr>
+<tr><td>GC</td> <td>Game Comment</td> <td><i>text</i></td> <td>Any comment. E.g. <tt>GC[This is Cho Chikun's 1000th win as a professional]</tt>, <tt>GC[Translated by Megumi Kawai]</tt>, <tt>GC[Wang
+ Lei made an illegal ko capture on move 223 in what should have been a 
+void game due to triple ko. He was ruled to have passed on that move and
+ the position was restored with Zhou to move]</tt></td></tr>
+<tr><td>GM</td> <td>Game</td> <td><i>number</i></td> <td><tt>GM[1]</tt>: Go. Higher numbers denote other games, see <a href="#GM">GM</a></td></tr>
+<tr><td>GN</td> <td>Game Name</td> <td><i>simpletext</i></td> <td>Filename, number or identifier associated with the game</td></tr>
+<tr><td>HA</td> <td>Handicap</td> <td><i>number</i></td> <td>Number of handicap stones</td></tr>
+<tr><td>JD</td> <td>Japanese Date</td> <td><i>simpletext</i></td> <td>Date, given in Japanese Era, Year, Month, Day format</td></tr>
+<tr><td>KM</td> <td>Komi</td> <td><i>real</i></td> <td>Possibly negative number of points paid by Black to White</td></tr>
+<tr><td>LB</td> <td>Label</td> <td><i>labellist</i></td> <td>E.g. <tt>LB[]</tt>, <tt>LB[kg:a]</tt>, <tt>LB[fm:F][fj:E][fk:D][gj:C][gk:B][hi:A]</tt></td></tr>
+<tr><td>LC</td> <td></td> <td><i>number</i></td> <td>Number of byo-yomi periods</td></tr>
+<tr><td>LT</td> <td></td> <td><i>time</i></td> <td>Length of byo-yomi periods</td></tr>
+<tr><td>MA</td> <td>Mark</td> <td><i>pointlist</i></td> <td>Mark the indicated stones with an 'X'</td></tr>
+<tr><td>MN</td> <td>Move Number</td> <td><i>number</i></td> <td>In the rootnode: the number of moves of the game. Elsewhere: the request to label the move with the given number</td></tr>
+<tr><td>N</td> <td>Node name</td> <td><i>simpletext</i></td> <td>E.g. <tt>N[Diagram 1]</tt>, <tt>N[Sacrifice]</tt></td></tr>
+<tr><td>OB</td> <td>Overtime Black</td> <td><i>number</i></td> <td>Number of black moves still to make in this byo-yomi period</td></tr>
+<tr><td>OH</td> <td>Old Handicap</td> <td><i>simpletext</i></td> <td>E.g. <tt>OH[(B)BW]</tt>
+ for sen-ai-sen, a handicap where the weaker player takes Black two out 
+of every three games, and takes Black in the present game</td></tr>
+<tr><td>OT</td> <td>Overtime</td> <td><i>simpletext</i></td> <td>Description of the type of byo-yomi used</td></tr>
+<tr><td>OW</td> <td>Overtime White</td> <td><i>number</i></td> <td>Number of white moves still to make in this byo-yomi period</td></tr>
+<tr><td>PB</td> <td>Player Black</td> <td><i>simpletext</i></td> <td>Name of black player</td></tr>
+<tr><td>PC</td> <td>Place</td> <td><i>simpletext</i></td> <td>Location of the game</td></tr>
+<tr><td>PL</td> <td>Player to play</td> <td><i>color</i></td> <td>Player to go first (B or W)</td></tr>
+<tr><td>PW</td> <td>Player White</td> <td><i>simpletext</i></td> <td>Name of white player</td></tr>
+<tr><td>RE</td> <td>Result</td> <td><i>simpletext</i></td> <td>E.g. <tt>Jigo</tt>, <tt>B+3.5</tt>, <tt>W+T</tt>, <tt>Void</tt>. See <a href="#RE">RE</a></td></tr>
+<tr><td>RO</td> <td>Round</td> <td><i>simpletext</i></td> <td>Tournament stage or round</td></tr>
+<tr><td>RU</td> <td>Rules</td> <td><i>simpletext</i></td> <td>Rule set in use</td></tr>
+<tr><td>SL</td> <td>Selected points</td> <td><i>pointlist</i></td> <td>Select a number of points in order to refer to them in a comment</td></tr>
+<tr><td>SO</td> <td>Source</td> <td><i>simpletext</i></td> <td>Game source. E.g. <tt>SO[weiqi.com.tom]</tt>, <tt>SO[Kido yearbook 1969]</tt></td></tr>
+<tr><td>SQ</td> <td>Square</td> <td><i>pointlist</i></td> <td>Mark the indicated stones with a square</td></tr>
+<tr><td>SZ</td> <td>Size</td> <td><i>number</i> | <i>numberpair</i></td> <td>E.g. <tt>SZ[19]</tt>, or <tt>SZ[2:9]</tt> for a 2x9 board (with 2 columns and 9 rows)</td></tr>
+<tr><td>TB</td> <td>Territory Black</td> <td><i>pointlist</i></td> <td>Black territory</td></tr>
+<tr><td>TM</td> <td>Time</td> <td><i>time</i></td> <td>Total time for each player</td></tr>
+<tr><td>TR</td> <td>Triangle</td> <td><i>pointlist</i></td> <td>Mark the indicated stones with a triangle</td></tr>
+<tr><td>TW</td> <td>Territory White</td> <td><i>pointlist</i></td> <td>White territory</td></tr>
+<tr><td>US</td> <td>User</td> <td><i>simpletext</i></td> <td>User who entered the game</td></tr>
+<tr><td>VW</td> <td>View</td> <td><i>pointlist</i></td> <td>Part of the board to be shown. A subsequent <tt>VW[]</tt> removes this restriction</td></tr>
+<tr><td>W</td> <td>White move</td> <td><i>move</i></td> <td>Make a white move</td></tr>
+<tr><td>WC</td> <td>White Country</td> <td><i>simpletext</i></td> <td>Country of the white player</td></tr>
+<tr><td>WL</td> <td>White&nbsp;time&nbsp;Left</td> <td><i>time</i></td> <td>Time left after this move</td></tr>
+<tr><td>WR</td> <td>White Rank</td> <td><i>simpletext</i></td> <td>Rank of white player</td></tr>
+<tr><td>WT</td> <td>White Team</td> <td><i>simpletext</i></td> <td>Team of the white player</td></tr>
+</tbody></table>
+</p><p>
+Of the above, the six properties BC, JD, LC, LT, OH, WC are not in FF[4].
+
+</p><h3><a name="details">Details</a></h3>
+<dl>
+<dt>BR, WR</dt>
+<dd>BR[value] and WR[value] have as value the rank(s) of the black and
+white players. If a player has several ranks, these can be separated
+by commas. For example, <tt>PB[Mukai Chiaki] BR[5p, Female Honinbo]
+PW[Fujisawa Rina] WR[2p, Aizu Cup]</tt>. When there are several
+black or white players, their ranks are separated by "&amp;", and given
+in the same order as the names (see PB, PW).</dd>
+
+<dt>DT</dt>
+<dd>
+DT[value] has as value an ISO standard date, when available.
+For example DT[1946-07-31].
+When less information is available, one can omit day, as in DT[1946-07],
+and month, as in DT[1946]. When more information is available, one can
+add the starting time, as in DT[2000-01-01 00:53].
+For games played over several days, the dates can be given separated
+by commas, or by .. or ~ to denote an interval. Such a sequence of dates
+can be condensed, as in DT[1946-07-31,08-15,16,17].
+A Japanese era date is given via the JD property.
+</dd>
+
+<dt><a name="GM">GM</a></dt>
+<dd>
+GM[number] defines the type of game in the present game record.
+Valid numbers are:
+<p>
+</p><div style="float: left; width: 25%;">
+<table class="sm">
+<tbody><tr><td>1</td> <td><a href="https://en.wikipedia.org/wiki/Go_(game)">Go</a></td></tr>
+<tr><td>2</td> <td><a href="https://en.wikipedia.org/wiki/Reversi">Othello</a></td></tr>
+<tr><td>3</td> <td><a href="https://en.wikipedia.org/wiki/Chess">Chess</a></td></tr>
+<tr><td>4</td> <td><a href="https://en.wikipedia.org/wiki/Gomoku">Gomoku</a>/<a href="https://en.wikipedia.org/wiki/Renju">Renju</a></td></tr>
+<tr><td>5</td> <td><a href="https://en.wikipedia.org/wiki/Nine_Men%27s_Morris">Nine Men's Morris</a></td></tr>
+<tr><td>6</td> <td><a href="https://en.wikipedia.org/wiki/Backgammon">Backgammon</a></td></tr>
+<tr><td>7</td> <td><a href="https://en.wikipedia.org/wiki/Xiangqi">Xiangqi</a></td></tr>
+<tr><td>8</td> <td><a href="https://en.wikipedia.org/wiki/Shogi">Shogi</a></td></tr>
+<tr><td>9</td> <td><a href="https://en.wikipedia.org/wiki/Lines_of_Action">Lines of Action</a></td></tr>
+<tr><td>10</td> <td><a href="https://en.wikipedia.org/wiki/Ataxx">Ataxx</a></td></tr>
+</tbody></table>
+</div>
+<div style="float: left; width: 25%;">
+<table class="sm">
+<tbody><tr><td>11</td> <td><a href="https://en.wikipedia.org/wiki/Hex_(board_game)">Hex</a></td></tr>
+<tr><td>12</td> <td><a href="https://en.wikipedia.org/wiki/Jungle_(board_game)">Jungle</a></td></tr>
+<tr><td>13</td> <td><a href="https://en.wikipedia.org/wiki/Neutron_(game)">Neutron</a></td></tr>
+<tr><td>14</td> <td><a href="https://en.wikipedia.org/wiki/Phutball">Phutball</a></td></tr>
+<tr><td>15</td> <td><a href="http://www.gamerz.net/pbmserv/quadrature.html">Quadrature</a></td></tr>
+<tr><td>16</td> <td><a href="https://en.wikipedia.org/wiki/Trax_(game)">Trax</a></td></tr>
+<tr><td>17</td> <td><a href="https://en.wikipedia.org/wiki/Tantrix">Tantrix</a></td></tr>
+<tr><td>18</td> <td><a href="https://en.wikipedia.org/wiki/Game_of_the_Amazons">Amazons</a></td></tr>
+<tr><td>19</td> <td>Octi</td></tr>
+<tr><td>20</td> <td><a href="https://en.wikipedia.org/wiki/Gess">Gess</a></td></tr>
+</tbody></table>
+</div>
+<div style="float: left; width: 25%;">
+<table class="sm">
+<tbody><tr><td>21</td> <td><a href="https://en.wikipedia.org/wiki/TwixT">Twixt</a></td></tr>
+<tr><td>22</td> <td><a href="https://en.wikipedia.org/wiki/Z%C3%88RTZ">Zèrtz</a></td></tr>
+<tr><td>23</td> <td><a href="https://en.wikipedia.org/wiki/Plateau_(game)">Plateau</a></td></tr>
+<tr><td>24</td> <td><a href="https://en.wikipedia.org/wiki/YINSH">Yinsh</a></td></tr>
+<tr><td>25</td> <td><a href="https://en.wikipedia.org/wiki/P%C3%9CNCT">Punct</a></td></tr>
+<tr><td>26</td> <td><a href="https://en.wikipedia.org/wiki/Gobblet">Gobblet</a></td></tr>
+<tr><td>27</td> <td><a href="https://en.wikipedia.org/wiki/Hive_(game)">Hive</a></td></tr>
+<tr><td>28</td> <td>Exxit</td></tr>
+<tr><td>29</td> <td><a href="https://en.wikipedia.org/wiki/Tafl_games">Hnefatafl</a></td></tr>
+<tr><td>30</td> <td>Kuba</td></tr>
+</tbody></table>
+</div>
+<div style="float: left; width: 25%;">
+<table class="sm">
+<tbody><tr><td>31</td> <td>Tripples</td></tr>
+<tr><td>32</td> <td>Chase</td></tr>
+<tr><td>33</td> <td><a href="http://mancala.wikia.com/wiki/Tumbling_Down">Tumbling Down</a></td></tr>
+<tr><td>34</td> <td><a href="http://mancala.wikia.com/wiki/Sahara">Sahara</a></td></tr>
+<tr><td>35</td> <td>Byte</td></tr>
+<tr><td>36</td> <td><a href="https://en.wikipedia.org/wiki/Focus_(board_game)">Focus</a></td></tr>
+<tr><td>37</td> <td><a href="https://en.wikipedia.org/wiki/DVONN">Dvonn</a></td></tr>
+<tr><td>38</td> <td><a href="https://en.wikipedia.org/wiki/TAMSK">Tamsk</a></td></tr>
+<tr><td>39</td> <td><a href="https://en.wikipedia.org/wiki/GIPF_(game)">Gipf</a></td></tr>
+<tr><td>40</td> <td><a href="https://en.wikipedia.org/wiki/Dots_(game)">Kropki</a></td></tr>
+</tbody></table>
+</div>
+<p style="clear: both;">
+<br>
+<font size="-2">
+In many cases this is only a reserved number. No actual use
+is being made of SGF game records in most of these playing communities.
+However, <a href="http://www.gnubg.com/documentation/doku.php?id=working_with_matches">GNU backgammon</a> uses SGF.
+There is some use for LOA (Lines of Action).
+</font>
+</p></dd>
+
+<dt>KM</dt>
+<dd>
+KM[value] has as value a decimal number, positive or negative.
+For example, KM[7.5]. One might wish to recognize values
+postfixed by "子", for example KM[3.75子] or KM[3又3/4子],
+for games under Chinese rules.
+This "子" postfix can be regarded as a unit of 2 points.
+Similarly, "目" represents a unit of 1 point, and can be ignored.
+</dd>
+
+<dt>OH</dt>
+<dd>("Old Handicap". Property introduced by GoGoD.) Examples:
+<!-- see http://senseis.xmp.net/?Uchikomi -->
+<!-- see http://senseis.xmp.net/?MatchHandicapSystem -->
+<table class="sm">
+<tbody><tr><th>name</th> <th>notation</th> <th>comments</th></tr>
+<tr><td>tagai-sen</td> <td>OH[B-W]</td> <td>Equal rank players, alternate in taking black</td></tr>
+<tr><td>sen-ai-sen</td> <td>OH[B-W-B]</td> <td>Weaker player gets black two out of three games</td></tr>
+<tr><td>josen</td> <td>OH[B]</td> <td>Weaker player always gets black</td></tr>
+<tr><td>sen-ni-sen</td> <td>OH[B-2-B]</td> <td>Weaker player plays black, and gets a HA[2] every third game</td></tr>
+<tr><td>sen-ni</td> <td>OH[B-2]</td> <td>Weaker player plays black, and gets a HA[2] every other game</td></tr>
+</tbody></table>
+It is not necessary to indicate the weaker player (since he takes black),
+except in the case of sen-ai-sen, where OH[(B)-W-B] and OH[B-(W)-B] denote
+a game with the weaker player taking black respectively white.
+<!-- the former would be 先二先，先 -->
+Often, the hyphens are omitted.
+</dd>
+
+<dt>PB, PW</dt>
+<dd>In Pair Go two black players and two white players play in turn.
+In Relay Go, several black players and several white players play in turn.
+In such a case, the PB and PW values list the players with player names
+separated by "&amp;". Similarly, the BR and WR values list player ranks
+separated by "&amp;". For example,
+<tt>PB[Segoe Kensaku &amp; Makino Jozan &amp; Fujisawa Kuranosuke] BR[8d &amp; 3d &amp; 7d]
+PW[Go Seigen &amp; Shinohara Masami &amp; Hayashi Yutaro] WR[8d &amp; 6d &amp; 7d]</tt>.
+An alternative markup style includes the ranks with PB, PW separated from
+the player name by a comma, and omits the BR and WR properties.
+For example,
+<tt>PB[Segoe Kensaku, 8d &amp; Makino Jozan, 3d &amp; Fujisawa Kuranosuke, 7d]
+PW[Go Seigen, 8d &amp; Shinohara Masami, 6d &amp; Hayashi Yutaro, 7d]</tt>.
+</dd>
+
+<dt><a name="RE">RE</a></dt>
+<dd>
+RE[value] has as value "B+" or "W+" when Black or White won,
+possibly followed by a number if they won by that number of points,
+or followed by "R", "T", or "F" when the game ended by
+resign, time exceeded, or forfeit.
+The value for jigo is "Jigo". If the rules say that jigo counts as a win
+for Black or for White, the value is "B+0" or "W+0".
+The value may also be "Void" (with explanation, such as "triple ko",
+elsewhere). Or "Unfinished". Or "Playing", in case this is a live game,
+still being played. Or "?", if the result is unknown.
+</dd>
+
+<dt>RU</dt>
+<dd>
+RU[value] has as value the string "Japanese" or "Chinese" or "Ing"
+in case these rules are used. A year or other description can be added
+when important. Other values may occur.
+</dd>
+</dl>
+<p>
+
+</p><h2><a name="historical">Historical remarks</a></h2>
+<h3><a name="identifiers">Property identifiers</a></h3>
+Modern property names are upper case only.
+In ancient game records one meets "Black[jj]" instead of "B[jj]",
+and "REsult[B+3]" instead of "RE[B+3]",
+and "SiZe[19]" instead of "SZ[19]", and "CoPyright[...]" instead of "CP[...]".
+Software handling SGF must be able to accept lower case
+letters in property names (and ignore them).
+Similarly, one meets "RE[B+Resign]", "RE[B+Time]", "RE[B+Forfeit]"
+instead of "RE[B+R]", "RE[B+T]", "RE[B+F]".
+<p>
+Usually, the first symbol of a property identifier is upper case,
+but one meets "GaMe[1]goWriteVersion[1.4e]".
+</p><p>
+There have been times that a property name had at most two
+upper case letters. Modern software accepts property names
+of arbitrary length. Property names like KGSDE, KGSSB, KGSSW and
+MULTIGOGM are common.
+
+</p><h3><a name="escapes">Escapes</a></h3>
+The above grammar only gives special status to the "]" symbol,
+and no other symbols need escaping than this, and a "\" that is
+not meant to be an escape. Earlier grammars also made the colon ":" special,
+and one meets escaped colons, and escaped multibyte characters of which the
+first byte is '\' or ']' or ':'. Such escapes can be ignored.
+<!--
+One also meets escapes inside a multibyte character of which a later byte
+is '\' or ']' or ':'. Such escapes should be deleted if one manages to
+recognize them.
+-->
+
+<h3><a name="indivprops">Individual properties</a></h3>
+<dl>
+<dt>AP</dt> <dd>In the FF[4] standard this has syntax
+"<i>simpletext</i> ':' <i>simpletext</i>", where the idea is that
+the colon separates program name and version. In practice one sees
+e.g. <tt>GoGoD95</tt> and <tt>Free Climber 0 . 8 . 11 . 61</tt>
+without colon.</dd>
+<dt>B, W</dt> <dd>Since <tt>ss</tt> is the lower right hand corner
+of a 19x19 board, <tt>tt</tt> was used to denote a pass.
+But larger boards are sometimes used, and a pass should now be
+written <tt>B[]</tt> or <tt>W[]</tt>.</dd>
+<dt>CA</dt> <dd>In FF[4] the default character set was ISO-8859-1
+aka Latin-1. Today this is unreasonable, and UTF-8 is the new default.
+On the one hand because there is no reason to expect Western Europe
+to be the main producer of SGF files. On the other hand, because
+ASCII and UTF-8 can be recognized with high confidence, while
+ISO-8859-1 cannot easily be recognized.</dd>
+<dt>CR</dt> <dd>It is common for display programs to indicate the
+last move in some way, e.g. with a circle. Sometimes a game record
+is redundantly marked up with lots of CR[]s, since each move was the last one
+when it was played. Of course such last-move circles need not be
+indicated in the game record.</dd>
+<dt>PL</dt> <dd>
+The color of the player to move is indicated by B or W, sometimes
+Black or White. In older files one also sees PL[1] and PL[2]
+instead of PL[B] and PL[W]. (This is according to the
+<a href="http://www.red-bean.com/sgf/ff1_3/ff3.html#SGF4List">alphabetical
+list</a> in the FF[3] standard.)
+</dd>
+<dt>RE</dt> <dd>In the FF[4] standard the result Jigo is represented
+as RE[0]. In practice one finds collections where the result is
+missing for all games with Jigo result. Writing <tt>RE[Jigo]</tt>
+is more robust.</dd>
+<dt>TM</dt> <dd>In the FF[4] standard the parameter is a real.
+In practice this is inconvenient, and one encounters <tt>TM[5400]</tt>
+and <tt>TM[300]</tt> where <tt>TM[15h]</tt> and <tt>TM[5h]</tt> was meant.
+Using units leads to fewer errors.</dd>
+</dl>
+
+<h3><a name="obsolete">Obsolete properties</a></h3>
+In the FF[4] and earlier standards several properties are described
+that are omitted here. Nothing is wrong with properties outside the
+present text, except that they are not standardized here, and their
+function will depend on the software used.
+<p>
+Examples are AR (Arrow), BM (Bad move), BS (Black Species),
+CH (Check mark), DD (Dim points), DG (Diagram),
+DI (Difficulty of a problem), DM (even position),
+DO (Doubtful move), EL (Eval. comp move), EX (Expected move),
+FG (Figure), GB (Good for Black), GW (Good for White), HO (Hotspot),
+KO (illegal move), ID (Game identifier),
+IL (Illegal move), IT (Interesting move),
+L (Letter), LN (Line),
+LT (Loss on Time is enforced), M (Mark),
+OM (Moves per overtime), ON (Opening Name), OP(Overtime period),
+OV (Operator overhead), PM (Print move mode), RG (Region),
+SC (Secure stones), SE (Self test),
+SI (positions marked with a Sigma), ST (Style),
+TC (Territory Count), TE (Tesuji), UC (Unclear position),
+V (Value), WS (White Species).
+
+<!--
+<h3>Variations</h3>
+There have been other conventions about the way to store variations,
+and it is possible to criticize the version standardized here.
+-->
+
+</p><h2><a name="remarks">General remarks</a></h2>
+
+<h3><a name="coords">Coordinates</a></h3>
+The default SGF coordinates have origin upper-left and rows and columns
+labeled a..s (on a 19x19 board). The standard coordinates used in the
+West have origin bottom-left, with rows numbered 1..19, and columns A..T
+where the I is skipped. It is easy to extend software to understand
+both systems of coordinates.
+
+<h3><a name="timeprops">Time properties</a></h3>
+At the end of the game, one wishes to write how much time the game
+took. Nowadays that often takes the form of a comment:
+<tt>C[Time used: B: 9h59m, W: 4h58m]</tt>.
+Sometimes TM is misused here. One might consider adding a property
+TU ("Time used").
+<p>
+Overtime has many forms. 
+Canadian byo-yomi gives each player an indefinite number of
+byo-yomi periods in each of which a fixed number of moves
+has to be played. For Canadian byo-yomi, the OT description
+should mention (i) that Canadian byo-yomi is used,
+(ii) the length of each period, (iii) the number of moves/period.
+For example: <tt>OT[30 moves / 10m]</tt>.
+After each move one can give OB and BL or OW and WL to indicate
+the number of moves still to make, and the time available for that.
+After the last move in a period, with <i>t</i> seconds left,
+it is better to give <tt>OB[0]BL[</tt><i>t</i><tt>]</tt> than to give
+say <tt>OB[30]BL[600]</tt> (in case of 30 moves in a 10-minute period),
+since the latter does not provide new information, and the former
+enables one to see how much time was spent on this move.
+</p><p>
+Japanese byo-yomi gives each player a fixed number of byo-yomi periods
+of fixed length, for example 10 periods of 1 minute each. Time counting
+starts anew for each new move. Over the entire game each player can use
+the given number of full byo-yomi periods, and an arbitrary number of
+partial periods. For Japanese byo-yomi, the OT description should mention
+(i) that Japanese byo-yomi is used,
+(ii) the number of periods, (iii) the length of each period.
+For example: <tt>OT[10x1m]</tt>. Equivalently, <tt>LC[10] LT[60]</tt>
+(or <tt>TC[10] TT[60]</tt>).
+After each move one might write the number of remaining periods,
+say again using properties OB and OW.
+</p><p>
+In a match under the Ing rules, players can buy additional time
+a few times, and pay with points (as if komi was increased or decreased).
+For example, a player may be able to buy an additional 20m time period
+at most three times, and lose when the last period is exhausted.
+The price of a period is 2 points. The default length of a period is 1/6th
+of the length of the main time, as given by TM.
+Of interest is the number of time periods each player bought (and when),
+and their length when not default. The default komi is 8 (with jigo a win
+for Black). A way to represent the points paid might be to add them to /
+subtract them from the komi, so that KM[14] indicates that Black bought
+three additional periods. Details can be given in a Game Comment.
+
+</p><h3><a name="commentprops">Comment properties</a></h3>
+One needs at least three different types of comment.
+Comments on the moves are given with C.
+Comments on the game are given with GC.
+Comments on the SGF file are needed, but no standard label is in common use.
+
+<h3><a name="privateprops">Private properties</a></h3>
+In order to avoid future conficts, one can use a prefix for private
+properties. For example, KGS uses or used a few properties with KGS- prefix
+describing the counting process.
+<p>
+<table>
+<tbody><tr><th>prop</th> <th>meaning</th> <th>arg syntax</th> <th>description</th></tr>
+<tr><td>KGSDE</td> <td>Dead</td> <td><i>pointlist</i></td> <td>List of stones regarded dead</td></tr>
+<tr><td>KGSSB</td> <td>Score Black</td> <td><i>real</i></td> <td>Total number of points for Black</td></tr>
+<tr><td>KGSSW</td> <td>Score White</td> <td><i>real</i></td> <td>Total number of points for White</td></tr>
+</tbody></table>
+</p><p>
+This shows the use of a private prefix to avoid name clashes.
+Should it become desirable to standardize these properties,
+they should probably be called DE, SB and SW.
+</p><p>
+Multigo uses MULTIGOGM and MULTIGOBM (bookmark).
+</p><p>
+GoGoD PBase uses or used the rootnode property KK
+(label or key, used in problem collections).
+<!-- The syntax seems to be {"^" key}, starting with caret,
+and with carets as separators. -->
+</p><p>
+The Dragon Go Server uses or used a private property XM to indicate the number
+of the next move, as in XM[245], used as a rootnode property.
+Elsewhere XM[] is used to indicate the last move of the actual game,
+in the NodeSequence of that last move, often in a situation with variations.
+<!-- It looks like the placement of each handicap stone counts
+as a move here. -->
+</p><p>
+SmartGo uses or used a largish number of private properties:
+</p><p>
+<font size="-2">
+TY (Moyo points), TZ (Unsettled points),
+TC (Blocks that can be captured tactically),
+TP (One of several blocks can be captured tactically),
+TK (Ko points: Control of territory depends on winning a ko, for both sides),
+KB (Ko points favorable for black: Black can play to control those points,
+white can make a ko),
+KW (Ko points favorable for white: White can play to control those points,
+black can make a ko),
+E (List of points where stones are captured, or empty list in the root),
+EG (For Environmental Go: list of coupon values),
+TU (The time used to solve a problem),
+NN (The number of nodes examined to solve a problem),
+NL (The number of evaluations or leaf nodes),
+MD (The maximal depth reached during a search),
+DE (Depth: the number of plies searched),
+PD (Partial Depth: the number of top level moves at deepest search),
+MO (The move motive),
+MM (All move motives),
+PN (Proof number),
+DN (Disproof number),
+QE, QB, QW (in search patterns: Not Empty, Not Black, Not White).
+</font>
+</p><p>
+
+</p><h3><a name="SGF2">SGF2 properties</a></h3>
+There is an SGF dialect with files starting out "(" instead of "(;",
+and with property names GM, EV, KM, DT replaced by GK, TE, KO, RD.
+Sometimes this dialect is attributed to Nihon Ki-in.
+One also sees HD for the combination HA plus AB.
+<p>
+
+</p><h3><a name="compression">Compressed sequences</a></h3>
+The typical SGF file has lots of redundancy: a long string
+B[xx]W[yy]B[zz]... of moves with alternating colors, where
+the first color is clear from the context.
+SmartGo uses or has used the compressed version S[xxyyzz...].
+
+<h1><a name="appendix">Appendix</a></h1>
+What property identifiers are used in practice?
+For a sample of 1682246 SGF files the tables below gives
+the frequencies with which the various properties occurred.
+
+<h2><a name="rootnodefreqs">Occurrences in the rootnode</a></h2>
+We list the 83 properties that occurred in the rootnode at least 250 times.
+<p>
+</p><div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>1623694</td> <td>PW</td></tr>
+<tr><td>1623630</td> <td>PB</td></tr>
+<tr><td>1607378</td> <td>RE</td></tr>
+<tr><td>1569449</td> <td>DT</td></tr>
+<tr><td>1358775</td> <td>EV</td></tr>
+<tr><td>1355769</td> <td>KM</td></tr>
+<tr><td>1269764</td> <td>WR</td></tr>
+<tr><td>1263389</td> <td>BR</td></tr>
+<tr><td>974499</td> <td>SZ</td></tr>
+<tr><td>797402</td> <td>FF</td></tr>
+<tr><td>766395</td> <td>PC</td></tr>
+<tr><td>619910</td> <td>CA</td></tr>
+<tr><td>531252</td> <td>RO</td></tr>
+<tr><td>518901</td> <td>GM</td></tr>
+<tr><td>405107</td> <td>AP</td></tr>
+<tr><td>390167</td> <td>SO</td></tr>
+<tr><td>299563</td> <td>US</td></tr>
+<tr><td>290200</td> <td>RU</td></tr>
+<tr><td>267817</td> <td>TM</td></tr>
+<tr><td>247780</td> <td>C</td></tr>
+<tr><td>247621</td> <td>HA</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>232721</td> <td>AB</td></tr>
+<tr><td>188867</td> <td>WC</td></tr>
+<tr><td>188854</td> <td>BC</td></tr>
+<tr><td>160079</td> <td>OT</td></tr>
+<tr><td>151411</td> <td>GN</td></tr>
+<tr><td>144047</td> <td>AW</td></tr>
+<tr><td>124418</td> <td>ST</td></tr>
+<tr><td>64752</td> <td>MN</td></tr>
+<tr><td>59405</td> <td>WT</td></tr>
+<tr><td>59345</td> <td>BT</td></tr>
+<tr><td>39891</td> <td>TI</td></tr>
+<tr><td>32230</td> <td>LC</td></tr>
+<tr><td>30942</td> <td>GC</td></tr>
+<tr><td>28474</td> <td>LT</td></tr>
+<tr><td>21894</td> <td>B</td></tr>
+<tr><td>16821</td> <td>TE</td></tr>
+<tr><td>16777</td> <td>KO</td></tr>
+<tr><td>16692</td> <td>RD</td></tr>
+<tr><td>13813</td> <td>CP</td></tr>
+<tr><td>12419</td> <td>MULTIGOGM</td></tr>
+<tr><td>12025</td> <td>GK</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>9482</td> <td>OH</td></tr>
+<tr><td>6078</td> <td>ID</td></tr>
+<tr><td>5690</td> <td>TC</td></tr>
+<tr><td>5345</td> <td>WS</td></tr>
+<tr><td>5345</td> <td>BS</td></tr>
+<tr><td>4468</td> <td>LB</td></tr>
+<tr><td>4426</td> <td>TR</td></tr>
+<tr><td>3976</td> <td>TL</td></tr>
+<tr><td>3343</td> <td>PL</td></tr>
+<tr><td>2970</td> <td>VW</td></tr>
+<tr><td>2370</td> <td>AN</td></tr>
+<tr><td>2252</td> <td>LKM</td></tr>
+<tr><td>1766</td> <td>W</td></tr>
+<tr><td>1701</td> <td>ZZ</td></tr>
+<tr><td>1581</td> <td>JD</td></tr>
+<tr><td>1000</td> <td>N</td></tr>
+<tr><td>988</td> <td>PTM</td></tr>
+<tr><td>899</td> <td>WL</td></tr>
+<tr><td>899</td> <td>BL</td></tr>
+<tr><td>895</td> <td>PM</td></tr>
+<tr><td>885</td> <td>FG</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>858</td> <td>CO</td></tr>
+<tr><td>854</td> <td>PDT</td></tr>
+<tr><td>854</td> <td>GE</td></tr>
+<tr><td>854</td> <td>DP</td></tr>
+<tr><td>854</td> <td>DI</td></tr>
+<tr><td>846</td> <td>TEV</td></tr>
+<tr><td>814</td> <td>MA</td></tr>
+<tr><td>652</td> <td>OM</td></tr>
+<tr><td>533</td> <td>CR</td></tr>
+<tr><td>513</td> <td>DTX</td></tr>
+<tr><td>490</td> <td>EVX</td></tr>
+<tr><td>437</td> <td>KI</td></tr>
+<tr><td>428</td> <td>SY</td></tr>
+<tr><td>421</td> <td>BP</td></tr>
+<tr><td>419</td> <td>WP</td></tr>
+<tr><td>402</td> <td>AX</td></tr>
+<tr><td>393</td> <td>PI</td></tr>
+<tr><td>323</td> <td>AE</td></tr>
+<tr><td>310</td> <td>T</td></tr>
+<tr><td>258</td> <td>WV</td></tr>
+</tbody></table></div>
+<p style="clear: both;">
+<br>
+This starts out with lots of well-known properties, and the first one
+not documented yet is ST.
+</p><p>
+<font size="-2">(This ST is a backwards-compatibility hack.
+It is a metaproperty intended to tell the current display program
+which display program was used by the author of the comments.
+Some display programs would automatically assign labels a, b, c, ...
+to siblings of the current node. Some would assign such labels to
+children of the current node. The current user interface might wish
+to know what style was used originally and mimic the behavior of the
+old display program, so that letters used in comments are understandable.
+This metaproperty also stores another bit of information, namely whether
+upon display there should be automatic board markup for variations.
+Of the above occurrences of ST, 96% are <tt>ST[2]</tt>: no markup.)
+</font>
+</p><p>
+TI is "Tournament Index", an integer numbering tournaments.<!--gokifu-->
+Of course B and W in the root node are mistakes.
+The properties TE, KO, RD, GK are aliases for EV, KM, DT, GM in SGF2 style.
+MULTIGOGM (with value 0 or 1) is probably left by the Go editor MultiGo.
+TC can be Territory Count or Tail Comment.
+</p><p>
+<font size="-2">
+A non-commented game record often has metainformation only in rootnode
+and final node. Since comments in the final node are a bit fragile
+(comments are often stripped away outside the rootnode), some sites use
+TC[<i>text</i>] in the root node, and C[<i>text</i>] on the final node
+(with the same text).
+</font>
+</p><p>
+TL and LKM and PTM and PDT are aliases for TM and KM and TM and DT.
+The property ZZ gives an explanation (in Chinese) of the following property
+label.
+</p><p>
+<font size="-2">
+For example,
+"ZZ[白方姓名]PW[河野临]ZZ[白方英文]WE[Kono Rin]ZZ[白方段位]WR[九段]"
+says "ZZ[White player name]PW[河野临]ZZ[White player English name]WE[Kono Rin]ZZ[White player rank]WR[9p]".
+<br>
+An interesting reflexive metaproperty. This usage violates the rule that
+each property label may occur at most once in a node. Property names
+that occur in this context: SZ, RM, EV, GT, GB, GS, SK,
+DT, DC, PC, PB, BE, BR, BK, PW, WE, WR, WK, KM, SO, US,
+RE, RC, NT, OA, OB, ON, OC, OT, LC.
+</font>
+</p><p>
+In goproblems one sees GE (problem type, e.g. "joseki", "life and death",
+"tesuji", "endgame") and DI ("Difficulty", with values e.g. <tt>7k</tt>,
+<tt>1d</tt>) and CO and DP (two integers with unknown meaning).
+Of course one also needs to describe what variations are correct and wrong,
+but usually that is done with a formalized comment.
+</p><p>
+TEV looks like a mistake or a year, 
+OM gives the total number of moves, or the number of moves per Canadian
+byoyomi period, KI ("Integer Komi") gives twice the komi, SY ("System")
+gives the Go Editor version (e.g. "Cgoban 1.9.2", "Written by GoBase-0.0.9",
+"Converted by sgf2misc-2.7.2").
+</p><p>
+BP and WP form a solution to what to do in the case of multiple players.
+One writes BP[player1][player2][player3].
+A different solution uses PI ("People Involved") and labels:
+PI[B1 : Takahara Shuuji : 3p][W1 : Hasegawa Sunao : 9p].
+</p><p>
+<font size="-2">There is an
+<a href="http://www.red-bean.com/sgf/ff5/new.htm">FF[5]</a> proposal.
+Of the files investigated, 392 claimed FF[5].
+(Rough distribution: no FF: 880000, FF[4]: 606000, FF[3]: 187000,
+FF[1]: 4200, FF[5]: 392, FF[03]:4.)
+These were roughly the same files that used AX (a small integer<!--0,1,2-->
+with unknown meaning), PI (as above) and OT with a similar labeled style,
+e.g. <tt>OT[TM:A:10800][TG:1][OP:A:60][OM:A:1][NO:-1]</tt>.
+</font>
+</p><p>
+The Aya program uses T for "time used for the present move".
+(It measures in seconds, with is not optimal, since there are frequent 0's.
+Giving one decimal when the number of seconds is less than 10, say,
+is probably better.)
+However, in most of the files investigated T had values like <tt>8h</tt>,
+with T an alias for TM, or values like <tt>Region:Korea</tt>.
+</p><p>
+<a href="http://gowrite.net/">GoWrite</a> is an SGF editor,
+and WV gives the goWriteVersion,
+e.g. <tt>WV[1.4p,Unregistered version]</tt>.
+WX gives the goWriteeXtension, e.g. <tt>WX[DefPic=001]</tt>.
+
+</p><h2><a name="otherfreqs">Occurrences in non-rootnodes</a></h2>
+We list the 32 properties that occurred outside the rootnode
+at least 600 times. (This cutoff is chosen so as to get rid of
+typos and properties like PB, PW, SZ, KM, RE that should have been
+in the rootnode.)
+<p>
+</p><div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>172139927</td> <td>B</td></tr>
+<tr><td>171372522</td> <td>W</td></tr>
+<tr><td>1754547</td> <td>C</td></tr>
+<tr><td>373777</td> <td>LB</td></tr>
+<tr><td>162999</td> <td>N</td></tr>
+<tr><td>93424</td> <td>CR</td></tr>
+<tr><td>86632</td> <td>BL</td></tr>
+<tr><td>86590</td> <td>WL</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>69765</td> <td>TR</td></tr>
+<tr><td>58734</td> <td>MN</td></tr>
+<tr><td>35589</td> <td>AB</td></tr>
+<tr><td>33034</td> <td>AW</td></tr>
+<tr><td>18993</td> <td>OB</td></tr>
+<tr><td>18973</td> <td>RN</td></tr>
+<tr><td>18769</td> <td>PT</td></tr>
+<tr><td>18302</td> <td>OW</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>15380</td> <td>AE</td></tr>
+<tr><td>10703</td> <td>MA</td></tr>
+<tr><td>10644</td> <td>ID</td></tr>
+<tr><td>9201</td> <td>L</td></tr>
+<tr><td>8439</td> <td>SQ</td></tr>
+<tr><td>8153</td> <td>TW</td></tr>
+<tr><td>8013</td> <td>TB</td></tr>
+<tr><td>5299</td> <td>SI</td></tr>
+</tbody></table></div>
+<div style="float: left; width: 25%;">
+<table class="stat">
+<tbody><tr><td>5220</td> <td>TL</td></tr>
+<tr><td>3501</td> <td>BM</td></tr>
+<tr><td>1993</td> <td>M</td></tr>
+<tr><td>1066</td> <td>E</td></tr>
+<tr><td>872</td> <td>FG</td></tr>
+<tr><td>695</td> <td>WS</td></tr>
+<tr><td>695</td> <td>BS</td></tr>
+<tr><td>652</td> <td>V</td></tr>
+</tbody></table></div>
+<p style="clear: both;">
+<br>
+The top of the table is as expected: lots of moves B, W, a few more
+Black moves than White. On average 102.3 Black moves per game and
+101.9 White moves per game, for an average game length of 204 moves.
+</p><p>
+Comments C, markup with LB, N, CR, TR, MN, MA, SQ, M,
+time left and byo-yomi periods left BL, WL, OB, OW.
+</p><p>
+The AB and AW were mostly mistakes (these should have been B, W
+or should have been in the rootnode). Some of the AB, AW, AE come
+from an old style of handling variations, where first the actual move
+is given, and then variations are noted as children of that node
+(instead of siblings), by undoing the actual move with AE,
+and adding the variation move with AB or AW.
+(Such a node ;AB[xy]AE[zw] shifts the node numbering by 1, and is
+undesirable for many other reasons as well. Many viewers do not support it.)
+</p><p>
+RN and PT belong to a certain dialect of SGF2 and are found at the start
+of a variation.
+ID is used by some to number the moves. L gives a labeling letter.
+TW and TB are the territories given at the end of the game.
+SI is a FF[3] property that gives a position marked with a sigma.
+I do not know what the nonroot TL is. One sees some moves marked with
+<tt>TL[0,0]BL[0]</tt>.
+</p><p>
+Judgments BM ("Bad Move"), GB ("Good for Black"), GW ("Good for White"),
+IT ("Interesting move"), EX ("Expected move"), DO ("Doubtful move")
+are not seen very often (in this sample of SGF files).
+</p><p>
+Property E gives (in its own node) the stones captured by the
+preceding move. E.g. <tt>;B[io];E[ip]</tt> and <tt>;W[dj];E[dk][ek]</tt>.
+(It can be viewed as a command to empty these positions.)
+Such a property is useful only for very weak viewers, that cannot
+compute chains and liberties themselves. But if used they should have
+been in the same node as the capturing move.
+</p><p>
+FG ("Figure"), V ("Value"). I do not know what the nonroot BS, WS are,
+probably mistakes.
+</p><p>
+
+</p><hr>
+<h2><a name="contents">Contents</a></h2>
+<ul>
+<li><a href="#SGF">The SGF Format</a>
+<ul>
+<li><a href="#intro">Introduction</a></li>
+<li><a href="#grammar">Grammar</a></li>
+<li><a href="#parsing">Parsing</a></li>
+<li><a href="#charset">Character set</a></li>
+<li><a href="#semantics">Semantics</a></li>
+<li><a href="#games">Game types</a></li>
+<li><a href="#rootprops">Root node properties</a>
+<ul>
+<li><a href="#event">Event</a></li>
+<li><a href="#game">Game details</a></li>
+<li><a href="#meta">Meta properties</a></li>
+</ul></li>
+<li><a href="#nodeprops">Node properties</a>
+<ul>
+<li><a href="#moveprops">Move properties</a></li>
+<li><a href="#markupprops">Markup properties</a></li>
+<li><a href="#displayprops">Display properties</a></li>
+</ul></li>
+<li><a href="#extendedprops">Extended properties</a></li>
+<li><a href="#units">Units</a></li>
+<li><a href="#proplist">List of properties</a>
+<ul>
+<li><a href="#valuetypes">Value types</a></li>
+<li><a href="#list">List</a></li>
+<li><a href="#details">Details</a></li>
+</ul></li>
+<li><a href="#historical">Historical remarks</a>
+<ul>
+<li><a href="#identifiers">Property identifiers</a></li>
+<li><a href="#escapes">Escapes</a></li>
+<li><a href="#indivprops">Individual properties</a></li>
+<li><a href="#obsolete">Obsolete properties</a></li>
+<!-- Variations -->
+</ul></li>
+<li><a href="#remarks">General remarks</a>
+<ul>
+<li><a href="#coords">Coordinates</a></li>
+<li><a href="#timeprops">Time properties</a></li>
+<li><a href="#commentprops">Comment properties</a></li>
+<li><a href="#privateprops">Private properties</a></li>
+<li><a href="#SGF2">SGF2 properties</a></li>
+<li><a href="#compression">Compressed sequences</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#appendix">Appendix</a>
+<ul>
+<li><a href="#rootnodefreqs">Occurrences in the rootnode</a></li>
+<li><a href="#otherfreqs">Occurrences in non-rootnodes</a></li>
+</ul></li>
+</ul>
+<p>
+
+
+</p></body></html>
